@@ -26,18 +26,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * - Protected endpoint access
  * - Unauthorized access without token
  */
-@SpringBootTest
-@AutoConfigureMockMvc
-public class JwtAuthenticationIT {
-
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Slf4j
+class JwtAuthenticationIT {
+    
     @Autowired
-    private MockMvc mockMvc;
-
+    private TestRestTemplate restTemplate;
+    
     @Autowired
     private JwtTokenProvider jwtTokenProvider;
-
-    @Autowired
-    private ObjectMapper objectMapper;
 
     private String validToken;
     private String invalidToken = "invalid.token.here";
@@ -299,4 +296,99 @@ public class JwtAuthenticationIT {
         System.out.println("✓ CORS headers handled correctly");
     }
 
+ @Test
+    void testTokenInvalid() {
+        // ARRANGE: Usar un token completamente inválido
+        String invalidToken = "invalid.token.here";
+        
+        // ACT: Llamar endpoint protegido
+        ResponseEntity<String> response = restTemplate.exchange(
+            "/api/v1/patients",
+            HttpMethod.GET,
+            new HttpEntity<>(new HttpHeaders() {{
+                set("Authorization", "Bearer " + invalidToken);
+            }}),
+            String.class
+        );
+        
+        // ASSERT: Debe retornar 401 Unauthorized
+        assertThat(response.getStatusCode())
+            .isEqualTo(HttpStatus.UNAUTHORIZED);
+        
+        assertThat(response.getBody())
+            .contains("Invalid or expired token");
+        
+        log.info("✓ Test passed: Invalid token rejected");
+    }
+    
+    @Test
+    void testTokenMissingBearerPrefix() {
+        String token = jwtTokenProvider.generateToken("Monitoring", "test_user");
+        
+        // Sin "Bearer " prefix
+        ResponseEntity<String> response = restTemplate.exchange(
+            "/api/v1/patients",
+            HttpMethod.GET,
+            new HttpEntity<>(new HttpHeaders() {{
+                set("Authorization", token); // Falta "Bearer "
+            }}),
+            String.class
+        );
+        
+        // Debe retornar 401
+        assertThat(response.getStatusCode())
+            .isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+    
+    @Test
+    void testTokenExpired() {
+        // ARRANGE: Generar token con expiración en el pasado
+        // (Requiere inyectar JwtTokenProvider)
+        String expiredToken = generateExpiredToken();
+        
+        // ACT: Llamar endpoint protegido
+        ResponseEntity<String> response = restTemplate.exchange(
+            "/api/v1/patients",
+            HttpMethod.GET,
+            new HttpEntity<>(new HttpHeaders() {{
+                set("Authorization", "Bearer " + expiredToken);
+            }}),
+            String.class
+        );
+        
+        // ASSERT: Debe retornar 401 Token Expired
+        assertThat(response.getStatusCode())
+            .isEqualTo(HttpStatus.UNAUTHORIZED);
+        
+        assertThat(response.getBody())
+            .contains("expired");
+    }
+    
+    @Test
+    void testPublicEndpointNoToken() {
+        // GET /health NO requiere token
+        ResponseEntity<String> response = restTemplate.getForEntity(
+            "/health",
+            String.class
+        );
+        
+        assertThat(response.getStatusCode())
+            .isEqualTo(HttpStatus.OK);
+    }
+    
+    @Test
+    void testProtectedEndpointNoToken() {
+        // GET /patients SÍ requiere token
+        ResponseEntity<String> response = restTemplate.getForEntity(
+            "/api/v1/patients",
+            String.class
+        );
+        
+        // Debe retornar 401 o 403
+        assertThat(response.getStatusCode().value())
+            .isIn(401, 403);
+    }
+}
+
+    
 }
