@@ -41,243 +41,284 @@ import java.util.stream.Collectors;
  * - GET /patients/monitoring - Get all patients with current metrics and alerts
  */
 @RestController
-@RequestMapping("/patients")
+@RequestMapping("/api/v1/patients/monitoring")
 @RequiredArgsConstructor
+@Tag(name = "Monitoring", description = "Patient monitoring endpoints")
 @Slf4j
-@Tag(name = "Monitoring", description = "Patient monitoring dashboard endpoints")
 public class MonitoringController {
-
-    private final PatientRepository patientRepository;
+    
+    private final PatientService patientService;
     private final TelemetryReadingRepository telemetryReadingRepository;
     private final AlertRepository alertRepository;
-
+    
     /**
-     * Get all patients with their current monitoring status and alerts.
-     * 
-     * Returns comprehensive monitoring data for dashboard display:
-     * - Patient basic information
-     * - Latest telemetry readings for each vital sign
-     * - Current status (ACTIVE, DISCHARGED, CRITICAL)
-     * - Active alerts with severity
-     * 
-     * @return list of patients with monitoring data
+     * GET /api/v1/patients/monitoring
+     * Retorna lista de pacientes con datos de monitoreo en tiempo real.
      */
-    @GetMapping("/monitoring")
-    @Operation(
-            summary = "Get patient monitoring dashboard",
-            description = "Retrieve all patients with current vital signs, status, and active alerts for the monitoring dashboard"
-    )
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Successfully retrieved patient monitoring data",
-                    content = @Content(array = @ArraySchema(schema = @Schema(implementation = PatientMonitoringDTO.class)))),
-            @ApiResponse(responseCode = "500", description = "Internal server error")
-    })
+    @GetMapping
+    @Operation(summary = "Get all patients monitoring data",
+               description = "Returns all patients with latest metrics and active alerts")
     public ResponseEntity<List<PatientMonitoringDTO>> getPatientMonitoring() {
-        log.info("MonitoringController: Fetching patient monitoring dashboard data");
-
         try {
-            // Get all patients
-            List<Patient> patients = patientRepository.findAll();
-            log.debug("MonitoringController: Found {} patients", patients.size());
-
-            // Build monitoring DTOs for each patient
-            List<PatientMonitoringDTO> monitoringData = patients.stream()
-                    .map(this::buildPatientMonitoringDTO)
-                    .collect(Collectors.toList());
-
-            log.info("MonitoringController: ✓ Successfully built monitoring data for {} patients", monitoringData.size());
-            return ResponseEntity.ok(monitoringData);
-
+            List<Patient> patients = patientService.getAllPatients();
+            
+            List<PatientMonitoringDTO> response = patients.stream()
+                .map(this::buildPatientMonitoringDTO)
+                .collect(Collectors.toList());
+            
+            log.info("✓ Retrieved monitoring data for {} patients", response.size());
+            return ResponseEntity.ok(response);
+            
         } catch (Exception e) {
-            log.error("MonitoringController: Error fetching patient monitoring data", e);
-            return ResponseEntity.status(500).build();
+            log.error("❌ Error retrieving patient monitoring data", e);
+            return ResponseEntity.internalServerError().build();
         }
     }
-
+    
     /**
-     * Build comprehensive monitoring DTO for a patient.
-     *
-     * @param patient the patient
-     * @return the monitoring DTO with latest metrics and active alerts
+     * Construye PatientMonitoringDTO para un paciente específico.
+     * Valida que todos los campos requeridos estén presentes.
      */
     private PatientMonitoringDTO buildPatientMonitoringDTO(Patient patient) {
-        // Get latest telemetry reading
-        TelemetryReading latestReading = telemetryReadingRepository
-                .findLatestReadingForPatient(patient);
-
-        // Get active alerts (unacknowledged)
-        List<Alert> activeAlerts = alertRepository.findByPatientAndAcknowledgedFalse(patient);
-
-        // Build latest metrics DTO
-        LatestMetricsDTO latestMetrics = buildLatestMetricsDTO(latestReading);
-
-        // Determine overall status based on alerts and patient status
-        String overallStatus = determineOverallStatus(patient, activeAlerts);
-
-        // Build alert summaries
+        // PASO 1: Obtener última lectura de telemetría
+        Optional<TelemetryReading> latestReading = 
+            telemetryReadingRepository.findFirstByPatientIdOrderByRecordedAtDesc(
+                patient.getId());
+        
+        // PASO 2: Construir LatestMetricsDTO (puede ser parcial)
+        LatestMetricsDTO latestMetrics = latestReading
+            .map(this::buildLatestMetricsDTO)
+            .orElse(buildEmptyMetricsDTO()); // Si NO hay lectura → retornar vacío
+        
+        // PASO 3: Obtener alertas sin reconocer
+        List<Alert> activeAlerts = alertRepository.findByPatientIdAndAcknowledgedFalse(
+            patient.getId());
+        
         List<AlertSummaryDTO> alertSummaries = activeAlerts.stream()
-                .map(this::buildAlertSummaryDTO)
-                .collect(Collectors.toList());
-
-        LocalDateTime lastUpdate = latestReading != null
-                ? latestReading.getRecordedAt()
-                : LocalDateTime.now();
-
-        return PatientMonitoringDTO.builder()
-                .patientId(patient.getId())
-                .patientName(patient.getName())
-                .room(patient.getRoom())
-                .bed(patient.getBed())
-                .status(overallStatus)
-                .latestMetrics(latestMetrics)
-                .activeAlerts(alertSummaries)
-                .lastUpdate(lastUpdate)
-                .build();
+            .map(this::buildAlertSummaryDTO)
+            .collect(Collectors.toList());
+        
+        // PASO 4: Determinar status general basado en alertas
+        String status = determinePatientStatus(patient, activeAlerts);
+        
+        // PASO 5: Validar respuesta antes de retornar
+        PatientMonitoringDTO dto = PatientMonitoringDTO.builder()
+            .patientId(patient.getId())
+            .patientName(patient.getName())
+            .room(patient.getRoom())
+            .bed(patient.getBed())
+            .status(status)
+            .latestMetrics(latestMetrics)
+            .activeAlerts(alertSummaries)
+            .lastUpdate(LocalDateTime.now())
+            .build();
+        
+        validateMonitoringDTO(dto);
+        return dto;
     }
-
+    
     /**
-     * Build LatestMetricsDTO from the most recent telemetry reading.
-     *
-     * @param reading the latest telemetry reading (may be null)
-     * @return metrics DTO with all vital signs
+     * Construye LatestMetricsDTO a partir de una TelemetryReading.
      */
     private LatestMetricsDTO buildLatestMetricsDTO(TelemetryReading reading) {
-        if (reading == null) {
-            return LatestMetricsDTO.builder()
-                    .heartRate(MetricDTO.builder().status("N/A").build())
-                    .spO2(MetricDTO.builder().status("N/A").build())
-                    .systolicPressure(MetricDTO.builder().status("N/A").build())
-                    .diastolicPressure(MetricDTO.builder().status("N/A").build())
-                    .temperature(MetricDTO.builder().status("N/A").build())
-                    .build();
-        }
-
         return LatestMetricsDTO.builder()
-                .heartRate(buildMetricDTO("heart_rate", reading.getHeartRate(), "bpm", reading.getRecordedAt(), 60f, 100f))
-                .spO2(buildMetricDTO("spo2", reading.getSpO2(), "%", reading.getRecordedAt(), 95f, 100f))
-                .systolicPressure(buildMetricDTO("systolic_pressure", reading.getSystolicPressure(), "mmHg", reading.getRecordedAt(), 120f, 140f))
-                .diastolicPressure(buildMetricDTO("diastolic_pressure", reading.getDiastolicPressure(), "mmHg", reading.getRecordedAt(), 80f, 90f))
-                .temperature(buildMetricDTO("temperature", reading.getTemperature(), "°C", reading.getRecordedAt(), 36.5f, 37.5f))
-                .build();
+            .heartRate(buildMetricDTO(
+                reading.getHeartRate(),
+                "bpm",
+                "heart_rate",
+                60.0, 100.0, // normal range
+                100.0 // warning threshold
+            ))
+            .spO2(buildMetricDTO(
+                reading.getSpO2(),
+                "%",
+                "spo2",
+                95.0, 100.0,
+                94.0
+            ))
+            .systolicPressure(buildMetricDTO(
+                reading.getSystolicPressure(),
+                "mmHg",
+                "systolic_pressure",
+                90.0, 120.0,
+                140.0
+            ))
+            .diastolicPressure(buildMetricDTO(
+                reading.getDiastolicPressure(),
+                "mmHg",
+                "diastolic_pressure",
+                60.0, 80.0,
+                95.0
+            ))
+            .temperature(buildMetricDTO(
+                reading.getTemperature(),
+                "°C",
+                "temperature",
+                36.5, 37.5,
+                38.5
+            ))
+            .build();
     }
-
+    
     /**
-     * Build a MetricDTO for a specific metric value.
-     *
-     * @param name the metric name
-     * @param value the metric value
-     * @param unit the measurement unit
-     * @param timestamp when the reading was taken
-     * @param normalMin minimum normal value
-     * @param normalMax maximum normal value
-     * @return the metric DTO with status
+     * Construye un MetricDTO con validaciones de rango.
      */
-    private MetricDTO buildMetricDTO(String name, Float value, String unit, LocalDateTime timestamp,
-                                     Float normalMin, Float normalMax) {
-        String status = determineMetricStatus(value, normalMin, normalMax);
-
-        return MetricDTO.builder()
-                .value(value)
-                .unit(unit)
-                .timestamp(timestamp)
-                .status(status)
-                .ruleThreshold(normalMax)
-                .build();
-    }
-
-    /**
-     * Determine metric status based on normal ranges.
-     *
-     * @param value the metric value
-     * @param normalMin minimum normal value
-     * @param normalMax maximum normal value
-     * @return status: NORMAL, WARNING, or CRITICAL
-     */
-    private String determineMetricStatus(Float value, Float normalMin, Float normalMax) {
+    private MetricDTO buildMetricDTO(
+            Float value,
+            String unit,
+            String metricName,
+            Double normalMin,
+            Double normalMax,
+            Double warningThreshold) {
+        
+        // Validar que el valor no sea null
         if (value == null) {
-            return "N/A";
+            return MetricDTO.builder()
+                .value(null)
+                .unit(unit)
+                .status("UNKNOWN")
+                .ruleThreshold(warningThreshold)
+                .build();
         }
-
-        if (value >= normalMin && value <= normalMax) {
-            return "NORMAL";
-        } else if (Math.abs(value - normalMin) < 10 || Math.abs(value - normalMax) < 10) {
-            return "WARNING";
-        } else {
-            return "CRITICAL";
-        }
+        
+        // Determinar status basado en rango
+        String status = determineMetricStatus(value, normalMin, normalMax, warningThreshold);
+        
+        return MetricDTO.builder()
+            .value(value)
+            .unit(unit)
+            .status(status)
+            .timestamp(LocalDateTime.now())
+            .ruleThreshold(warningThreshold)
+            .build();
     }
-
+    
     /**
-     * Build AlertSummaryDTO from an Alert.
-     *
-     * @param alert the alert
-     * @return alert summary DTO
+     * Retorna un LatestMetricsDTO vacío cuando NO hay lecturas.
+     */
+    private LatestMetricsDTO buildEmptyMetricsDTO() {
+        MetricDTO empty = MetricDTO.builder()
+            .value(null)
+            .status("NO_DATA")
+            .build();
+        
+        return LatestMetricsDTO.builder()
+            .heartRate(empty)
+            .spO2(empty)
+            .systolicPressure(empty)
+            .diastolicPressure(empty)
+            .temperature(empty)
+            .build();
+    }
+    
+    /**
+     * Construye AlertSummaryDTO a partir de una Alert.
      */
     private AlertSummaryDTO buildAlertSummaryDTO(Alert alert) {
-        // Extract metric name from alert message (format: "CRITICAL ALERT: metric_name value...")
         String metricName = extractMetricNameFromMessage(alert.getMessage());
+        Double metricValue = extractMetricValueFromMessage(alert.getMessage());
         
         return AlertSummaryDTO.builder()
-                .alertId(alert.getId())
-                .severity(alert.getSeverity().toString())
-                .message(alert.getMessage())
-                .triggeredAt(alert.getTriggeredAt())
-                .metricName(metricName)
-                .metricValue(null)  // Would need telemetry reading to populate this
-                .build();
+            .alertId(alert.getId())
+            .severity(alert.getSeverity())
+            .message(alert.getMessage())
+            .triggeredAt(alert.getTriggeredAt())
+            .metricName(metricName)
+            .metricValue(metricValue)
+            .build();
     }
-
+    
     /**
-     * Extract metric name from alert message.
-     *
-     * @param message the alert message
-     * @return the metric name or "UNKNOWN"
+     * Determina el status general del paciente basado en alertas activas.
+     * Lógica: CRITICAL > WARNING > NORMAL
      */
-    private String extractMetricNameFromMessage(String message) {
-        if (message == null || message.isEmpty()) {
-            return "UNKNOWN";
+    private String determinePatientStatus(Patient patient, List<Alert> activeAlerts) {
+        if (activeAlerts.isEmpty()) {
+            return patient.getStatus(); // Usar status del paciente si no hay alertas
         }
         
-        // Look for common metric names in the message
-        if (message.toLowerCase().contains("heart rate")) {
-            return "heart_rate";
-        } else if (message.toLowerCase().contains("spo2") || message.toLowerCase().contains("oxygen")) {
-            return "spo2";
-        } else if (message.toLowerCase().contains("systolic")) {
-            return "systolic_pressure";
-        } else if (message.toLowerCase().contains("diastolic")) {
-            return "diastolic_pressure";
-        } else if (message.toLowerCase().contains("temperature")) {
-            return "temperature";
-        }
-        
-        return "UNKNOWN";
-    }
-
-    /**
-     * Determine overall patient status based on alerts and patient status.
-     *
-     * @param patient the patient
-     * @param activeAlerts active alerts for this patient
-     * @return overall status
-     */
-    private String determineOverallStatus(Patient patient, List<Alert> activeAlerts) {
-        // If patient has CRITICAL alerts, overall status is CRITICAL
+        // Checar si hay alertas CRITICAL
         boolean hasCritical = activeAlerts.stream()
-                .anyMatch(alert -> alert.getSeverity().toString().equals("CRITICAL"));
+            .anyMatch(a -> "CRITICAL".equals(a.getSeverity()));
+        
         if (hasCritical) {
             return "CRITICAL";
         }
-
-        // If patient has WARNING alerts, overall status is WARNING
+        
+        // Checar si hay alertas WARNING
         boolean hasWarning = activeAlerts.stream()
-                .anyMatch(alert -> alert.getSeverity().toString().equals("WARNING"));
+            .anyMatch(a -> "WARNING".equals(a.getSeverity()));
+        
         if (hasWarning) {
             return "WARNING";
         }
-
-        // Otherwise use patient's own status
-        return patient.getStatus().toString();
+        
+        return patient.getStatus();
     }
-
+    
+    /**
+     * Determina el status de una métrica individual.
+     */
+    private String determineMetricStatus(
+            Float value,
+            Double normalMin,
+            Double normalMax,
+            Double warningThreshold) {
+        
+        if (value >= normalMin && value <= normalMax) {
+            return "NORMAL";
+        }
+        
+        // Revisar si está en zona de warning
+        if (Math.abs(value - normalMax) < 10 || Math.abs(value - normalMin) < 10) {
+            return "WARNING";
+        }
+        
+        return "CRITICAL";
+    }
+    
+    /**
+     * Extrae el nombre de métrica desde el mensaje de alerta.
+     * Patrón: "Alert: heart_rate value (XXX) triggered..."
+     */
+    private String extractMetricNameFromMessage(String message) {
+        Pattern pattern = Pattern.compile("Alert: (\\w+)");
+        Matcher matcher = pattern.matcher(message);
+        
+        return matcher.find() ? matcher.group(1) : "unknown";
+    }
+    
+    /**
+     * Extrae el valor de métrica desde el mensaje.
+     * Patrón: "value (XXX.XX)"
+     */
+    private Double extractMetricValueFromMessage(String message) {
+        Pattern pattern = Pattern.compile("value \\(([\\d.]+)\\)");
+        Matcher matcher = pattern.matcher(message);
+        
+        return matcher.find() ? Double.parseDouble(matcher.group(1)) : null;
+    }
+    
+    /**
+     * Valida que la respuesta MonitoringDTO sea válida.
+     */
+    private void validateMonitoringDTO(PatientMonitoringDTO dto) {
+        if (dto.getPatientId() == null) {
+            throw new IllegalArgumentException("Patient ID is required");
+        }
+        
+        if (StringUtils.isBlank(dto.getPatientName())) {
+            throw new IllegalArgumentException("Patient name is required");
+        }
+        
+        if (dto.getLatestMetrics() == null) {
+            throw new IllegalArgumentException("Latest metrics cannot be null");
+        }
+        
+        if (dto.getActiveAlerts() == null) {
+            throw new IllegalArgumentException("Active alerts cannot be null");
+        }
+        
+        log.debug("✓ Monitoring DTO validation passed for patient: {}", dto.getPatientId());
+    }
 }
