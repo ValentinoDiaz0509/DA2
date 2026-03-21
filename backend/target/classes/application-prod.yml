@@ -1,0 +1,60 @@
+spring:
+  application:
+    name: patient-monitoring-service
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    show-sql: false
+  datasource:
+    url: jdbc:postgresql://monitoring-db-prod:5432/monitoring_db_prod
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+  cloud:
+    stream:
+      bindings:
+        patientEventInput:
+          destination: patient-events-queue-prod
+          group: monitoring-service-prod
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+server:
+  port: 8080
+  compression:
+    enabled: true
+    min-response-size: 1024
+
+aws:
+  sqs:
+    endpoint: https://sqs.${AWS_REGION}.amazonaws.com
+    region: ${AWS_REGION}
+    enabled: true
+  credentials:
+    access-key: ${AWS_ACCESS_KEY}
+    secret-key: ${AWS_SECRET_KEY}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+logging:
+  level:
+    root: WARN
+    com.healthgrid.monitoring: INFO
+  pattern:
+    console: "%d{ISO8601} [%thread] %-5level %logger{36} - %msg%n"
