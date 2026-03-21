@@ -26,110 +26,140 @@ import java.util.List;
  * Token must be issued by Module 10 (Core).
  */
 @Component
-@RequiredArgsConstructor
 @Slf4j
+@RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
-
+    
     private final JwtTokenProvider jwtTokenProvider;
-
-    private static final String BEARER_PREFIX = "Bearer ";
-    private static final String AUTHORIZATION_HEADER = "Authorization";
-
+    
     @Override
-    protected void doFilterInternal(HttpServletRequest request, 
-                                   HttpServletResponse response, 
-                                   FilterChain filterChain) throws ServletException, IOException {
+    protected void doFilterInternal(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain) throws ServletException, IOException {
+        
         try {
-            // Extract token from Authorization header
-            Pair<String, String> tokenInfo = extractTokenInfo(request);
+            // PASO 1: Extraer Bearer token del header
+            String token = extractBearerToken(request);
             
-            if (tokenInfo != null && tokenInfo.getFirst() != null) {
-                String token = tokenInfo.getFirst();
-                String module = tokenInfo.getSecond();
-
-                // Validate token
-                if (jwtTokenProvider.validateToken(token)) {
-                    // Create authentication token
-                    String subject = jwtTokenProvider.getSubjectFromToken(token);
-                    String userId = jwtTokenProvider.getUserIdFromToken(token);
-                    
-                    // Create granted authorities (can add roles from token if needed)
-                    List<SimpleGrantedAuthority> authorities = new ArrayList<>();
-                    authorities.add(new SimpleGrantedAuthority("ROLE_MODULE_" + module));
-                    
-                    UsernamePasswordAuthenticationToken authentication = 
-                            new UsernamePasswordAuthenticationToken(
-                                    subject,
-                                    null,
-                                    authorities
-                            );
-                    
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
-                    
-                    log.debug("JwtAuthenticationFilter: ✓ Token validated for module: {}, userId: {}", 
-                            module, userId);
-                } else {
-                    log.warn("JwtAuthenticationFilter: Invalid or expired token");
-                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                    response.getWriter().write("{\"error\": \"Invalid or expired token\"}");
-                    return;
-                }
-            } else {
-                log.warn("JwtAuthenticationFilter: No valid Authorization header found");
-                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                response.getWriter().write("{\"error\": \"Missing or invalid Authorization header\"}");
+            if (token == null) {
+                // No hay token, pasar al siguiente filtro (endpoint público)
+                filterChain.doFilter(request, response);
                 return;
             }
-
+            
+            // PASO 2: Validar token
+            if (!jwtTokenProvider.validateToken(token)) {
+                // Token inválido o expirado
+                sendErrorResponse(response, HttpServletResponse.SC_UNAUTHORIZED,
+                    "Invalid or expired token");
+                return;
+            }
+            
+            // PASO 3: Verificar expiración EXPLÍCITAMENTE
+            if (jwtTokenProvider.isTokenExpired(token)) {
+                sendErrorResponse(response, HttpServletResponse.SC_UNAUTHORIZED,
+                    "Token has expired");
+                return;
+            }
+            
+            // PASO 4: Extraer claims
+            String module = jwtTokenProvider.getModuleFromToken(token);
+            String userId = jwtTokenProvider.getUserIdFromToken(token);
+            
+            if (module == null || userId == null) {
+                sendErrorResponse(response, HttpServletResponse.SC_UNAUTHORIZED,
+                    "Invalid token claims");
+                return;
+            }
+            
+            // PASO 5: Crear Authentication token
+            UsernamePasswordAuthenticationToken authToken = 
+                new UsernamePasswordAuthenticationToken(
+                    module + ":" + userId,
+                    null,
+                    List.of(new SimpleGrantedAuthority("ROLE_MODULE_" + module))
+                );
+            
+            // PASO 6: Establecer en SecurityContext
+            SecurityContextHolder.getContext().setAuthentication(authToken);
+            
+            log.debug("✓ JWT authentication successful - Module: {}, UserId: {}",
+                module, userId);
+            
+        } catch (MalformedJwtException e) {
+            log.warn("⚠️ Invalid JWT signature: {}", e.getMessage());
+            sendErrorResponse(response, HttpServletResponse.SC_UNAUTHORIZED,
+                "Invalid JWT signature");
+            return;
+        } catch (ExpiredJwtException e) {
+            log.warn("⚠️ Expired JWT token");
+            sendErrorResponse(response, HttpServletResponse.SC_UNAUTHORIZED,
+                "Token has expired");
+            return;
+        } catch (UnsupportedJwtException e) {
+            log.warn("⚠️ Unsupported JWT token: {}", e.getMessage());
+            sendErrorResponse(response, HttpServletResponse.SC_UNAUTHORIZED,
+                "Unsupported token format");
+            return;
+        } catch (IllegalArgumentException e) {
+            log.warn("⚠️ JWT claims string is empty: {}", e.getMessage());
+            sendErrorResponse(response, HttpServletResponse.SC_UNAUTHORIZED,
+                "Invalid token");
+            return;
         } catch (Exception e) {
-            log.error("JwtAuthenticationFilter: Error processing JWT token", e);
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.getWriter().write("{\"error\": \"Authentication failed\"}");
+            log.error("❌ Unexpected error in JWT filter", e);
+            sendErrorResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
+                "Authentication error");
             return;
         }
-
+        
+        // Pasar al siguiente filtro
         filterChain.doFilter(request, response);
     }
-
+    
     /**
-     * Extract token from Authorization header.
-     * Expected format: "Bearer <token>"
-     *
-     * @param request the HTTP request
-     * @return Pair of (token, module) or null if no valid header
+     * Extrae el Bearer token del header Authorization.
+     * Formato esperado: "Bearer {token}"
      */
-    private Pair<String, String> extractTokenInfo(HttpServletRequest request) {
-        String authHeader = request.getHeader(AUTHORIZATION_HEADER);
+    private String extractBearerToken(HttpServletRequest request) {
+        String header = request.getHeader("Authorization");
         
-        if (!StringUtils.hasText(authHeader) || !authHeader.startsWith(BEARER_PREFIX)) {
+        if (header == null || !header.startsWith("Bearer ")) {
             return null;
         }
         
-        String token = authHeader.substring(BEARER_PREFIX.length());
-        
-        if (!StringUtils.hasText(token)) {
-            return null;
-        }
-        
-        try {
-            String module = jwtTokenProvider.getModuleFromToken(token);
-            return Pair.of(token, module);
-        } catch (Exception e) {
-            log.debug("JwtAuthenticationFilter: Error extracting module from token", e);
-            return null;
-        }
+        return header.substring(7); // Remover "Bearer "
     }
-
+    
+    /**
+     * Envía respuesta JSON de error estructurada.
+     */
+    private void sendErrorResponse(HttpServletResponse response, int status, String message) 
+            throws IOException {
+        response.setStatus(status);
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        
+        JsonObject errorBody = new JsonObject();
+        errorBody.addProperty("error", message);
+        errorBody.addProperty("timestamp", LocalDateTime.now().toString());
+        errorBody.addProperty("status", status);
+        
+        response.getWriter().write(errorBody.toString());
+    }
+    
+    /**
+     * Excluir endpoints públicos del filtro JWT.
+     */
     @Override
-    protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
+    protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
         
-        // Skip authentication for these endpoints
         return path.startsWith("/swagger-ui") ||
-                path.startsWith("/v3/api-docs") ||
-                path.startsWith("/health") ||
-                path.startsWith("/api/v1/auth/token") ||  // Token generation endpoint
-                path.startsWith("/api/v1/auth/validate"); // Token validation endpoint
+               path.startsWith("/v3/api-docs") ||
+               path.startsWith("/health") ||
+               path.startsWith("/actuator") ||
+               path.startsWith("/api/v1/auth");
     }
-
 }
