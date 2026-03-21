@@ -25,111 +25,108 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class PatientMonitoringDTO {
-
+    
     @JsonProperty("patient_id")
     private UUID patientId;
-
+    
     @JsonProperty("patient_name")
     private String patientName;
-
+    
     @JsonProperty("room")
     private String room;
-
+    
     @JsonProperty("bed")
     private String bed;
-
-    @JsonProperty("status")
-    private String status;  // From Patient.status enum
-
+    
+    @JsonProperty("status") // NORMAL, WARNING, CRITICAL
+    private String status;
+    
     @JsonProperty("latest_metrics")
     private LatestMetricsDTO latestMetrics;
-
+    
     @JsonProperty("active_alerts")
     private List<AlertSummaryDTO> activeAlerts;
-
+    
     @JsonProperty("last_update")
     private LocalDateTime lastUpdate;
+}
 
-    /**
-     * Latest telemetry metrics for a patient.
-     */
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    public static class LatestMetricsDTO {
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+public class MetricDTO {
+    
+    @JsonProperty("value")
+    private Float value;
+    
+    @JsonProperty("unit")
+    private String unit;
+    
+    @JsonProperty("timestamp")
+    private LocalDateTime timestamp;
+    
+    @JsonProperty("status") // NORMAL, WARNING, CRITICAL, UNKNOWN
+    private String status;
+    
+    @JsonProperty("rule_threshold")
+    private Double ruleThreshold;
+}
 
-        @JsonProperty("heart_rate")
-        private MetricDTO heartRate;
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+public class AlertSummaryDTO {
+    
+    @JsonProperty("alert_id")
+    private UUID alertId;
+    
+    @JsonProperty("severity") // CRITICAL, WARNING, INFO
+    private String severity;
+    
+    @JsonProperty("message")
+    private String message;
+    
+    @JsonProperty("triggered_at")
+    private LocalDateTime triggeredAt;
+    
+    @JsonProperty("metric_name")
+    private String metricName;
+    
+    @JsonProperty("metric_value")
+    private Double metricValue;
+}
 
-        @JsonProperty("spo2")
-        private MetricDTO spO2;
-
-        @JsonProperty("systolic_pressure")
-        private MetricDTO systolicPressure;
-
-        @JsonProperty("diastolic_pressure")
-        private MetricDTO diastolicPressure;
-
-        @JsonProperty("temperature")
-        private MetricDTO temperature;
-
-    }
-
-    /**
-     * Single metric reading with status.
-     */
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    public static class MetricDTO {
-
-        @JsonProperty("value")
-        private Float value;
-
-        @JsonProperty("unit")
-        private String unit;
-
-        @JsonProperty("timestamp")
-        private LocalDateTime timestamp;
-
-        @JsonProperty("status")
-        private String status;  // NORMAL, WARNING, CRITICAL
-
-        @JsonProperty("rule_threshold")
-        private Float ruleThreshold;
-
-    }
-
-    /**
-     * Summary of an active alert.
-     */
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    public static class AlertSummaryDTO {
-
-        @JsonProperty("alert_id")
-        private UUID alertId;
-
-        @JsonProperty("severity")
-        private String severity;  // CRITICAL, WARNING, INFO
-
-        @JsonProperty("message")
-        private String message;
-
-        @JsonProperty("triggered_at")
-        private LocalDateTime triggeredAt;
-
-        @JsonProperty("metric_name")
-        private String metricName;
-
-        @JsonProperty("metric_value")
-        private Float metricValue;
-
-    }
-
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+public class MonitoringUpdateDTO {
+    
+    @JsonProperty("patient_id")
+    private UUID patientId;
+    
+    @JsonProperty("heart_rate")
+    private Float heartRate;
+    
+    @JsonProperty("spo2")
+    private Float spO2;
+    
+    @JsonProperty("systolic_pressure")
+    private Float systolicPressure;
+    
+    @JsonProperty("diastolic_pressure")
+    private Float diastolicPressure;
+    
+    @JsonProperty("temperature")
+    private Float temperature;
+    
+    @JsonProperty("timestamp")
+    private LocalDateTime timestamp;
 }
