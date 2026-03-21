@@ -1,0 +1,44 @@
+spring:
+  application:
+    name: patient-monitoring-service
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    show-sql: true
+  datasource:
+    url: jdbc:postgresql://localhost:5432/monitoring_db_dev
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+  cloud:
+    stream:
+      bindings:
+        patientEventInput:
+          destination: patient-events-queue-dev
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+server:
+  port: 8080
+
+aws:
+  sqs:
+    endpoint: http://localhost:4566
+    region: us-east-1
+    enabled: true
+  credentials:
+    access-key: test
+    secret-key: test
+
+logging:
+  level:
+    root: DEBUG
+    com.healthgrid.monitoring: DEBUG
+    org.springframework.web: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
