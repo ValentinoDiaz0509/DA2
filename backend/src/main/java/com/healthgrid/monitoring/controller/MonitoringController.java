@@ -1,10 +1,11 @@
 package com.healthgrid.monitoring.controller;
 
+import com.healthgrid.monitoring.dto.AlertSummaryDTO;
+import com.healthgrid.monitoring.dto.LatestMetricsDTO;
+import com.healthgrid.monitoring.dto.MetricDTO;
 import com.healthgrid.monitoring.dto.PatientMonitoringDTO;
-import com.healthgrid.monitoring.dto.PatientMonitoringDTO.AlertSummaryDTO;
-import com.healthgrid.monitoring.dto.PatientMonitoringDTO.LatestMetricsDTO;
-import com.healthgrid.monitoring.dto.PatientMonitoringDTO.MetricDTO;
 import com.healthgrid.monitoring.model.Alert;
+import com.healthgrid.monitoring.model.AlertSeverity;
 import com.healthgrid.monitoring.model.Patient;
 import com.healthgrid.monitoring.model.TelemetryReading;
 import com.healthgrid.monitoring.repository.AlertRepository;
@@ -19,16 +20,17 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -41,13 +43,13 @@ import java.util.stream.Collectors;
  * - GET /patients/monitoring - Get all patients with current metrics and alerts
  */
 @RestController
-@RequestMapping("/api/v1/patients/monitoring")
+@RequestMapping("/patients/monitoring")
 @RequiredArgsConstructor
 @Tag(name = "Monitoring", description = "Patient monitoring endpoints")
 @Slf4j
 public class MonitoringController {
-    
-    private final PatientService patientService;
+
+    private final PatientRepository patientRepository;
     private final TelemetryReadingRepository telemetryReadingRepository;
     private final AlertRepository alertRepository;
     
@@ -60,7 +62,7 @@ public class MonitoringController {
                description = "Returns all patients with latest metrics and active alerts")
     public ResponseEntity<List<PatientMonitoringDTO>> getPatientMonitoring() {
         try {
-            List<Patient> patients = patientService.getAllPatients();
+            List<Patient> patients = patientRepository.findAll();
             
             List<PatientMonitoringDTO> response = patients.stream()
                 .map(this::buildPatientMonitoringDTO)
@@ -82,8 +84,7 @@ public class MonitoringController {
     private PatientMonitoringDTO buildPatientMonitoringDTO(Patient patient) {
         // PASO 1: Obtener última lectura de telemetría
         Optional<TelemetryReading> latestReading = 
-            telemetryReadingRepository.findFirstByPatientIdOrderByRecordedAtDesc(
-                patient.getId());
+            Optional.ofNullable(telemetryReadingRepository.findLatestReadingForPatient(patient));
         
         // PASO 2: Construir LatestMetricsDTO (puede ser parcial)
         LatestMetricsDTO latestMetrics = latestReading
@@ -91,8 +92,7 @@ public class MonitoringController {
             .orElse(buildEmptyMetricsDTO()); // Si NO hay lectura → retornar vacío
         
         // PASO 3: Obtener alertas sin reconocer
-        List<Alert> activeAlerts = alertRepository.findByPatientIdAndAcknowledgedFalse(
-            patient.getId());
+        List<Alert> activeAlerts = alertRepository.findByPatientAndAcknowledgedFalse(patient);
         
         List<AlertSummaryDTO> alertSummaries = activeAlerts.stream()
             .map(this::buildAlertSummaryDTO)
@@ -220,7 +220,7 @@ public class MonitoringController {
         
         return AlertSummaryDTO.builder()
             .alertId(alert.getId())
-            .severity(alert.getSeverity())
+            .severity(alert.getSeverity().name())
             .message(alert.getMessage())
             .triggeredAt(alert.getTriggeredAt())
             .metricName(metricName)
@@ -234,12 +234,12 @@ public class MonitoringController {
      */
     private String determinePatientStatus(Patient patient, List<Alert> activeAlerts) {
         if (activeAlerts.isEmpty()) {
-            return patient.getStatus(); // Usar status del paciente si no hay alertas
+            return patient.getStatus().name();
         }
         
         // Checar si hay alertas CRITICAL
         boolean hasCritical = activeAlerts.stream()
-            .anyMatch(a -> "CRITICAL".equals(a.getSeverity()));
+            .anyMatch(a -> AlertSeverity.CRITICAL.equals(a.getSeverity()));
         
         if (hasCritical) {
             return "CRITICAL";
@@ -247,13 +247,13 @@ public class MonitoringController {
         
         // Checar si hay alertas WARNING
         boolean hasWarning = activeAlerts.stream()
-            .anyMatch(a -> "WARNING".equals(a.getSeverity()));
+            .anyMatch(a -> AlertSeverity.WARNING.equals(a.getSeverity()));
         
         if (hasWarning) {
             return "WARNING";
         }
         
-        return patient.getStatus();
+        return patient.getStatus().name();
     }
     
     /**

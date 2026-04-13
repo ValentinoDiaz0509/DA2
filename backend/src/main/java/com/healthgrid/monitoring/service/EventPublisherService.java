@@ -1,8 +1,37 @@
+package com.healthgrid.monitoring.service;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.healthgrid.monitoring.dto.AdmissionEventDTO;
+import com.healthgrid.monitoring.model.Alert;
+import com.healthgrid.monitoring.model.Patient;
+import com.healthgrid.monitoring.model.Rule;
+import com.healthgrid.monitoring.repository.PatientRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
+import software.amazon.awssdk.services.sqs.model.SendMessageResponse;
+import software.amazon.awssdk.services.sqs.model.SqsException;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class EventPublisherService {
     
+    // TODO(core): reemplazar publicacion directa a SQS por el adapter/event bus definido por Core.
     private final SqsClient sqsClient;
     private final ObjectMapper objectMapper;
     private final PatientRepository patientRepository;
@@ -26,15 +55,16 @@ public class EventPublisherService {
      * }
      */
     public void publishCriticalAlertEvent(Alert alert, Rule rule) {
+        // TODO(core): este evento deberia salir por la interfaz de integracion con Core, no directo a Module 6.
         try {
             // PASO 1: Recuperar paciente para obtener ubicación
-            Patient patient = patientRepository.findById(alert.getPatientId())
+            Patient patient = patientRepository.findById(alert.getPatient().getId())
                 .orElseThrow(() -> new RuntimeException("Patient not found"));
             
             // PASO 2: Construir AdmissionEventDTO con TODO el contexto requerido
             AdmissionEventDTO event = AdmissionEventDTO.builder()
-                .patientId(alert.getPatientId())
-                .alertSeverity(alert.getSeverity())
+                .patientId(alert.getPatient().getId())
+                .alertSeverity(alert.getSeverity().name())
                 .location(patient.getRoom() + "-" + patient.getBed()) // REQUERIDO
                 .triggeredRule(buildRuleDescription(rule)) // REQUERIDO
                 .metricName(rule.getMetricName())
@@ -64,8 +94,8 @@ public class EventPublisherService {
             SendMessageResponse response = sqsClient.sendMessage(request);
             
             log.info("✓ CRITICAL ALERT EVENT PUBLISHED TO MODULE 6 - " +
-                    "Patient: {}, MessageId: {}, Location: {}, Rule: {}",
-                alert.getPatientId(),
+                "Patient: {}, MessageId: {}, Location: {}, Rule: {}",
+                alert.getPatient().getId(),
                 response.messageId(),
                 event.getLocation(),
                 rule.getMetricName());
@@ -110,7 +140,7 @@ public class EventPublisherService {
      * Extrae el sensor ID del contexto del paciente o metadata.
      */
     private String extractSensorIdFromAlert(Alert alert) {
-        // TODO: Recuperar de última lectura de telemetría o metadata
+        // TODO(core): recuperar sensor_id real desde el contrato/evento original administrado por Core.
         return "SENSOR-UNKNOWN";
     }
     
@@ -148,10 +178,20 @@ public class EventPublisherService {
      * Genera un ID único para deduplicación FIFO en SQS.
      */
     private String generateDeduplicationId(Alert alert, Rule rule) {
-        return DigestUtils.sha256Hex(
-            alert.getPatientId() + "|" + 
+        return sha256Hex(
+            alert.getPatient().getId() + "|" +
             rule.getId() + "|" + 
             alert.getTriggeredAt().toString()
         );
+    }
+
+    private String sha256Hex(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is not available", e);
+        }
     }
 }

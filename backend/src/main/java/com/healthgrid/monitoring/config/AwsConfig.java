@@ -25,6 +25,7 @@ import java.net.URI;
 @Configuration
 public class AwsConfig {
 
+    // TODO(core): mover esta configuracion a la infraestructura/contrato compartido cuando Core defina la integracion real.
     @Value("${aws.credentials.access-key:test}")
     private String awsAccessKey;
 
@@ -47,6 +48,7 @@ public class AwsConfig {
      */
     @Bean
     public SqsClient sqsClient() {
+        // TODO(core): reemplazar cliente/config directa por el mecanismo de publicacion/consumo estandar provisto por Core.
         // Create credentials provider
         AwsBasicCredentials credentials = AwsBasicCredentials.create(awsAccessKey, awsSecretKey);
         StaticCredentialsProvider credentialsProvider = StaticCredentialsProvider.create(credentials);

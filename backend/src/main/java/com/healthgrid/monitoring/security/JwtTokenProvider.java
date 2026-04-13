@@ -24,7 +24,9 @@ import java.util.Date;
 @Slf4j
 public class JwtTokenProvider {
 
-    @Value("${security.jwt.secret:healthgrid-monitoring-secret-key-module10-issuer-2026}")
+    // TODO(core): este secret/issuer deberian venir del contrato real con Core.
+    // TODO(core): este componente deberia validar tokens emitidos por Core, no generarlos en produccion.
+    @Value("${security.jwt.secret:healthgrid-monitoring-secret-key-module10-issuer-2026-hs512-secure-key-abcdef1234567890}")
     private String jwtSecret;
 
     @Value("${security.jwt.expiration:86400000}") // 24 hours in milliseconds
@@ -41,6 +43,7 @@ public class JwtTokenProvider {
      * @return the signed JWT token
      */
     public String generateToken(String moduleId, String userId) {
+        // TODO(core): remover la generacion local de JWT cuando Core sea el issuer unico del sistema.
         try {
             SecretKey key = Keys.hmacShaKeyFor(jwtSecret.getBytes());
             

@@ -56,8 +56,11 @@ public interface TelemetryReadingRepository extends JpaRepository<TelemetryReadi
      * @param patient the patient
      * @return the most recent telemetry reading
      */
-    @Query("SELECT t FROM TelemetryReading t WHERE t.patient = :patient ORDER BY t.recordedAt DESC LIMIT 1")
-    TelemetryReading findLatestReadingForPatient(@Param("patient") Patient patient);
+    TelemetryReading findFirstByPatientOrderByRecordedAtDesc(Patient patient);
+
+    default TelemetryReading findLatestReadingForPatient(Patient patient) {
+        return findFirstByPatientOrderByRecordedAtDesc(patient);
+    }
 
     /**
      * Find readings where heart rate exceeds a threshold.

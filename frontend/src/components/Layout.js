@@ -23,12 +23,12 @@ import {
   Notifications as NotificationsIcon,
   Dashboard as DashboardIcon,
   Person as PersonIcon,
-  Alert as AlertIcon,
+  WarningAmber as AlertIcon,
   Settings as SettingsIcon,
   Logout as LogoutIcon
 } from '@mui/icons-material';
 import { useHealthGrid } from '../context/HealthGridContext';
-import { HOSPITAL_NAME, SYSTEM_NAME } from '../data/constants';
+import { HOSPITAL_NAME } from '../data/constants';
 
 const DRAWER_WIDTH = 280;
 

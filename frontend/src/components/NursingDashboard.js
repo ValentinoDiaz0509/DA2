@@ -30,13 +30,14 @@ export const NursingDashboard = ({ onSelectPatient }) => {
     setFilterFloor,
     setFilterStatus,
     getFilteredPatients,
-    setSelectedPatientId
+    setSelectedPatientId,
+    refreshPatients
   } = useHealthGrid();
 
   const filteredPatients = getFilteredPatients();
 
   const statusStats = {
-    stable: patients.filter(p => p.status === PATIENT_STATUS.STABLE).length,
+    stable: patients.filter(p => p.status === PATIENT_STATUS.NORMAL).length,
     warning: patients.filter(p => p.status === PATIENT_STATUS.WARNING).length,
     critical: patients.filter(p => p.status === PATIENT_STATUS.CRITICAL).length
   };
@@ -47,8 +48,7 @@ export const NursingDashboard = ({ onSelectPatient }) => {
   };
 
   const handleRefresh = () => {
-    // Simular refresh - en una aplicación real esto dispararía una recarga de datos
-    window.location.reload();
+    refreshPatients();
   };
 
   const handleResetFilters = () => {

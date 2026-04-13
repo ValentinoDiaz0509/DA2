@@ -1,8 +1,33 @@
+package com.healthgrid.monitoring.consumer;
+
+import com.healthgrid.monitoring.dto.TelemetryMessageDTO;
+import com.healthgrid.monitoring.dto.TelemetryReadingDTO;
+import com.healthgrid.monitoring.model.Alert;
+import com.healthgrid.monitoring.model.TelemetryReading;
+import com.healthgrid.monitoring.repository.TelemetryReadingRepository;
+import com.healthgrid.monitoring.service.RuleEngineService;
+import com.healthgrid.monitoring.service.TelemetryReadingService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Bean;
+import org.springframework.stereotype.Component;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.function.Consumer;
+
 @Component
 @Slf4j
 @RequiredArgsConstructor
 public class TelemetryConsumer {
     
+    // TODO(core): adaptar este consumer al contrato de eventos/routing definido por Core.
     private final TelemetryReadingService telemetryReadingService;
     private final RuleEngineService ruleEngineService;
     private final TelemetryReadingRepository telemetryReadingRepository;
@@ -13,6 +38,7 @@ public class TelemetryConsumer {
      */
     @Bean
     public Consumer<TelemetryMessageDTO> telemetryEventInput() {
+        // TODO(core): revisar nombre de binding, origen de eventos y esquema del mensaje cuando Core intermedie colas.
         return telemetryMessage -> {
             try {
                 log.info("Received telemetry message from sensor: {} for patient: {}",
@@ -31,11 +57,14 @@ public class TelemetryConsumer {
                 
                 // PASO 3: Convertir a DTO y guardar lectura
                 TelemetryReadingDTO readingDTO = convertToReadingDTO(telemetryMessage);
-                TelemetryReading savedReading = telemetryReadingService.recordReading(
+                TelemetryReadingDTO savedReadingDTO = telemetryReadingService.recordReading(
                     telemetryMessage.getPatientId(),
                     readingDTO
                 );
-                
+
+                TelemetryReading savedReading = telemetryReadingRepository.findById(savedReadingDTO.getId())
+                    .orElseThrow(() -> new IllegalStateException("Saved telemetry reading not found"));
+
                 log.info("✓ Telemetry reading saved with ID: {}", savedReading.getId());
                 
                 // PASO 4: Evaluar reglas y generar alertas (si es necesario)
@@ -68,7 +97,7 @@ public class TelemetryConsumer {
             "%s|%s|%d|%.0f|%.0f|%.0f|%.0f|%.0f",
             message.getSensorId(),
             message.getPatientId(),
-            message.getRecordedAt().getEpochSecond(), // Redondear a segundos
+            Instant.now().getEpochSecond(),
             Math.round(message.getMetrics().getHeartRate() * 10) / 10.0,
             Math.round(message.getMetrics().getSpO2() * 10) / 10.0,
             Math.round(message.getMetrics().getSystolicPressure() * 10) / 10.0,
@@ -76,7 +105,7 @@ public class TelemetryConsumer {
             Math.round(message.getMetrics().getTemperature() * 10) / 10.0
         );
         
-        return DigestUtils.sha256Hex(payload);
+        return sha256Hex(payload);
     }
     
     /**
@@ -84,6 +113,7 @@ public class TelemetryConsumer {
      * Usa una tabla de "processed messages" o cache en Redis.
      */
     private boolean isDuplicateMessage(String fingerprint) {
+        // TODO(core): implementar idempotencia real con la estrategia acordada con Core.
         // OPCIÓN 1: Usar tabla ProcessedMessage
         // return processedMessageRepository.existsById(fingerprint);
         
@@ -92,20 +122,32 @@ public class TelemetryConsumer {
         
         // OPCIÓN 3: Por ahora, logging simple
         log.debug("Checking if message {} was already processed", fingerprint);
-        return false; // TODO: Implementar verificación real
+        return false; // TODO(core): Implementar verificación real
     }
     
     /**
      * Convierte TelemetryMessageDTO a TelemetryReadingDTO.
      */
     private TelemetryReadingDTO convertToReadingDTO(TelemetryMessageDTO message) {
+        LocalDateTime recordedAt = LocalDateTime.ofInstant(Instant.now(), ZoneOffset.UTC);
+
         return TelemetryReadingDTO.builder()
             .heartRate(message.getMetrics().getHeartRate())
             .spO2(message.getMetrics().getSpO2())
             .systolicPressure(message.getMetrics().getSystolicPressure())
             .diastolicPressure(message.getMetrics().getDiastolicPressure())
             .temperature(message.getMetrics().getTemperature())
-            .recordedAt(message.getRecordedAt())
+            .recordedAt(recordedAt)
             .build();
+    }
+
+    private String sha256Hex(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is not available", e);
+        }
     }
 }

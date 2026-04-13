@@ -1,3 +1,28 @@
+package com.healthgrid.monitoring.service;
+
+import com.healthgrid.monitoring.dto.MonitoringUpdateDTO;
+import com.healthgrid.monitoring.model.Alert;
+import com.healthgrid.monitoring.model.AlertSeverity;
+import com.healthgrid.monitoring.model.Patient;
+import com.healthgrid.monitoring.model.Rule;
+import com.healthgrid.monitoring.model.RuleOperator;
+import com.healthgrid.monitoring.model.TelemetryReading;
+import com.healthgrid.monitoring.repository.AlertRepository;
+import com.healthgrid.monitoring.repository.PatientRepository;
+import com.healthgrid.monitoring.repository.RuleRepository;
+import com.healthgrid.monitoring.repository.TelemetryReadingRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -22,8 +47,8 @@ public class RuleEngineService {
         List<Alert> generatedAlerts = new ArrayList<>();
         
         // Validar que el paciente existe
-        Patient patient = patientRepository.findById(reading.getPatientId())
-            .orElseThrow(() -> new RuntimeException("Patient not found: " + reading.getPatientId()));
+        Patient patient = patientRepository.findById(reading.getPatient().getId())
+            .orElseThrow(() -> new RuntimeException("Patient not found: " + reading.getPatient().getId()));
         
         // Obtener todas las reglas activas
         List<Rule> activeRules = ruleRepository.findByEnabledTrue();
@@ -46,9 +71,10 @@ public class RuleEngineService {
                 .minusMinutes(LOOKBACK_MINUTES);
             
             List<TelemetryReading> historicalReadings = 
-                telemetryReadingRepository.findByPatientIdAndRecordedAtAfter(
-                    patient.getId(), 
-                    lookbackTime
+                telemetryReadingRepository.findReadingsByPatientAndTimeRange(
+                    patient,
+                    lookbackTime,
+                    reading.getRecordedAt()
                 );
             
             // PASO 3: Contar cuántas lecturas en la ventana violan la regla
@@ -76,7 +102,7 @@ public class RuleEngineService {
                         rule.getDurationSeconds());
                     
                     // Publicar evento a Module 6 (Internación) si es CRITICAL
-                    if ("CRITICAL".equals(rule.getSeverity())) {
+                    if (AlertSeverity.CRITICAL.equals(rule.getSeverity())) {
                         try {
                             eventPublisherService.publishCriticalAlertEvent(alert, rule);
                             log.info("✓ Critical alert event published to Module 6");
@@ -127,20 +153,16 @@ public class RuleEngineService {
      * Compara dos valores según el operador especificado.
      * Soporta: >, >=, <, <=, ==, !=
      */
-    private boolean compareValues(float actual, float threshold, String operator) {
+    private boolean compareValues(float actual, float threshold, RuleOperator operator) {
         final float FLOAT_TOLERANCE = 0.01f; // Tolerancia para comparaciones de flotantes
-        
-        return switch (operator.toUpperCase()) {
-            case "GREATER_THAN", ">" -> actual > threshold;
-            case "GREATER_THAN_OR_EQUAL", "GREATER_OR_EQUAL", ">=" -> actual >= threshold;
-            case "LESS_THAN", "<" -> actual < threshold;
-            case "LESS_THAN_OR_EQUAL", "LESS_OR_EQUAL", "<=" -> actual <= threshold;
-            case "EQUAL", "==" -> Math.abs(actual - threshold) < FLOAT_TOLERANCE;
-            case "NOT_EQUAL", "!=" -> Math.abs(actual - threshold) >= FLOAT_TOLERANCE;
-            default -> {
-                log.warn("Unknown operator: {}", operator);
-                yield false;
-            }
+
+        return switch (operator) {
+            case GREATER_THAN -> actual > threshold;
+            case GREATER_THAN_OR_EQUAL -> actual >= threshold;
+            case LESS_THAN -> actual < threshold;
+            case LESS_THAN_OR_EQUAL -> actual <= threshold;
+            case EQUAL -> Math.abs(actual - threshold) < FLOAT_TOLERANCE;
+            case NOT_EQUAL -> Math.abs(actual - threshold) >= FLOAT_TOLERANCE;
         };
     }
     
@@ -190,7 +212,7 @@ public class RuleEngineService {
         );
         
         return Alert.builder()
-            .patientId(patient.getId())
+            .patient(patient)
             .severity(rule.getSeverity())
             .message(message)
             .triggeredAt(LocalDateTime.now())
@@ -223,7 +245,7 @@ public class RuleEngineService {
     private void sendMonitoringUpdate(TelemetryReading reading) {
         try {
             MonitoringUpdateDTO update = MonitoringUpdateDTO.builder()
-                .patientId(reading.getPatientId())
+                .patientId(reading.getPatient().getId())
                 .heartRate(reading.getHeartRate())
                 .spO2(reading.getSpO2())
                 .systolicPressure(reading.getSystolicPressure())
@@ -233,11 +255,11 @@ public class RuleEngineService {
                 .build();
             
             simpMessagingTemplate.convertAndSend(
-                "/topic/monitoring/" + reading.getPatientId(),
+                "/topic/monitoring/" + reading.getPatient().getId(),
                 update
             );
-            
-            log.debug("✓ WebSocket update sent for patient: {}", reading.getPatientId());
+
+            log.debug("✓ WebSocket update sent for patient: {}", reading.getPatient().getId());
         } catch (Exception e) {
             log.warn("Failed to send WebSocket update (non-critical)", e);
         }

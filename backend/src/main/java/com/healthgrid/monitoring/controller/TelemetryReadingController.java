@@ -26,7 +26,7 @@ import java.util.UUID;
  * Provides endpoints for recording and retrieving patient vital signs data.
  */
 @RestController
-@RequestMapping("/api/v1/telemetry")
+@RequestMapping("/telemetry")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Telemetry", description = "Patient telemetry reading management")

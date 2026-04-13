@@ -101,7 +101,7 @@ export const MOCK_PATIENTS = [
     floor: 3,
     bed: '303',
     diagnosis: 'Post-operatorio',
-    status: PATIENT_STATUS.STABLE,
+    status: PATIENT_STATUS.NORMAL,
     vitals: {
       heartRate: 78,
       spO2: 97,

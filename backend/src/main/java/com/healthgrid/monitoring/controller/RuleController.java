@@ -25,7 +25,7 @@ import java.util.UUID;
  * Provides endpoints for managing and querying monitoring rules.
  */
 @RestController
-@RequestMapping("/api/v1/rules")
+@RequestMapping("/rules")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Rules", description = "Monitoring rule management")

@@ -1,68 +1,90 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  Alert,
   Box,
-  Container,
-  Paper,
-  Typography,
-  Grid,
-  Stack,
+  Button,
   Card,
   CardContent,
   CardHeader,
-  Button,
-  TextField,
+  Chip,
+  Container,
   Dialog,
-  DialogTitle,
-  DialogContent,
   DialogActions,
+  DialogContent,
+  DialogTitle,
+  Grid,
+  IconButton,
+  Paper,
+  Stack,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Chip,
-  Alert,
-  IconButton,
-  Tooltip
+  TextField,
+  Typography
 } from '@mui/material';
 import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-  Legend,
-  ResponsiveContainer,
-  ComposedChart,
-  Area,
-  AreaChart
-} from 'recharts';
-import {
-  Favorite as HeartIcon,
   Air as LungIcon,
-  Thermostat as TempIcon,
-  Settings as SettingsIcon,
   ArrowBack as BackIcon,
-  Warning as WarningIcon,
-  Check as CheckIcon,
-  Close as CloseIcon
+  Favorite as HeartIcon,
+  Settings as SettingsIcon,
+  Warning as WarningIcon
 } from '@mui/icons-material';
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip as RechartsTooltip,
+  XAxis,
+  YAxis
+} from 'recharts';
 import { useHealthGrid } from '../context/HealthGridContext';
-import { SEVERITY_LEVELS } from '../data/constants';
+import { PATIENT_STATUS, SEVERITY_LEVELS } from '../data/constants';
+
+const getStatusColor = (status) => {
+  switch (status) {
+    case PATIENT_STATUS.NORMAL:
+      return '#4CAF50';
+    case PATIENT_STATUS.WARNING:
+      return '#FF9800';
+    case PATIENT_STATUS.CRITICAL:
+      return '#F44336';
+    default:
+      return '#1565C0';
+  }
+};
+
+const STATUS_LABELS = {
+  [PATIENT_STATUS.NORMAL]: 'Estable',
+  [PATIENT_STATUS.WARNING]: 'Alerta',
+  [PATIENT_STATUS.CRITICAL]: 'Critico'
+};
+
+const formatMetric = (value, digits = 0, suffix = '') => (
+  typeof value === 'number' ? `${value.toFixed(digits)}${suffix}` : `--${suffix}`
+);
+
+const formatChartValue = (value, unit, label) => (
+  typeof value === 'number' ? [`${value.toFixed(0)} ${unit}`, label] : ['Sin dato', label]
+);
 
 export const PatientDetailView = ({ onBack }) => {
   const {
     getSelectedPatient,
+    triggerManualPanic,
     updatePatientThresholds,
-    vitalsTrendData,
-    triggerManualPanic
+    vitalsTrendData
   } = useHealthGrid();
-
   const patient = getSelectedPatient();
   const [thresholdsDialogOpen, setThresholdsDialogOpen] = useState(false);
   const [editedThresholds, setEditedThresholds] = useState(patient?.thresholds || {});
+
+  useEffect(() => {
+    setEditedThresholds(patient?.thresholds || {});
+  }, [patient]);
 
   if (!patient) {
     return (
@@ -80,13 +102,13 @@ export const PatientDetailView = ({ onBack }) => {
   const trendData = vitalsTrendData[patient.id] || [];
 
   const handleThresholdsChange = (vital, field, value) => {
-    setEditedThresholds({
-      ...editedThresholds,
+    setEditedThresholds((previousThresholds) => ({
+      ...previousThresholds,
       [vital]: {
-        ...editedThresholds[vital],
+        ...previousThresholds[vital],
         [field]: parseFloat(value)
       }
-    });
+    }));
   };
 
   const handleSaveThresholds = () => {
@@ -95,29 +117,10 @@ export const PatientDetailView = ({ onBack }) => {
   };
 
   const handlePanic = () => {
-    if (window.confirm('¿Disparar evento de pánico para este paciente? Esto notificará al equipo de internación.')) {
+    if (window.confirm('¿Disparar evento de panico para este paciente? Esto notificara al equipo de internacion.')) {
       triggerManualPanic(patient.id);
-      alert('Evento de pánico registrado. El equipo de respuesta ha sido notificado.');
+      alert('Evento de panico registrado. El equipo de respuesta ha sido notificado.');
     }
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'stable':
-        return '#4CAF50';
-      case 'warning':
-        return '#FF9800';
-      case 'critical':
-        return '#F44336';
-      default:
-        return '#1565C0';
-    }
-  };
-
-  const statusLabels = {
-    stable: 'Estable',
-    warning: 'Alerta',
-    critical: 'Crítico'
   };
 
   return (
@@ -130,7 +133,6 @@ export const PatientDetailView = ({ onBack }) => {
         overflow: 'auto'
       }}
     >
-      {/* Header */}
       <Paper
         sx={{
           backgroundImage: `linear-gradient(135deg, ${getStatusColor(patient.status)} 0%, ${getStatusColor(patient.status)} 100%)`,
@@ -143,22 +145,19 @@ export const PatientDetailView = ({ onBack }) => {
       >
         <Stack spacing={2}>
           <Stack direction="row" alignItems="center" spacing={1}>
-            <IconButton
-              onClick={onBack}
-              sx={{ color: '#fff', mr: 1 }}
-            >
+            <IconButton onClick={onBack} sx={{ color: '#fff', mr: 1 }}>
               <BackIcon />
             </IconButton>
             <Box flex={1}>
               <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>
-                📋 {patient.name}
+                {patient.name}
               </Typography>
               <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                Piso {patient.floor} - Cama {patient.bed} • {patient.diagnosis}
+                Habitacion {patient.room} - Cama {patient.bed} • {patient.diagnosis}
               </Typography>
             </Box>
             <Chip
-              label={statusLabels[patient.status].toUpperCase()}
+              label={(STATUS_LABELS[patient.status] || patient.status).toUpperCase()}
               sx={{
                 backgroundColor: 'rgba(255, 255, 255, 0.3)',
                 color: '#fff',
@@ -168,49 +167,45 @@ export const PatientDetailView = ({ onBack }) => {
             />
           </Stack>
 
-          {/* Quick Stats */}
           <Stack direction="row" spacing={3} sx={{ pt: 1, borderTop: '1px solid rgba(255, 255, 255, 0.3)' }}>
             <Box>
-              <Typography variant="caption" sx={{ opacity: 0.85 }}>Edad</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 700 }}>{patient.age} años</Typography>
+              <Typography variant="caption" sx={{ opacity: 0.85 }}>Habitacion</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>{patient.room}</Typography>
             </Box>
             <Box>
               <Typography variant="caption" sx={{ opacity: 0.85 }}>FC</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 700 }}>{patient.vitals.heartRate.toFixed(0)} bpm</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>{formatMetric(patient.vitals.heartRate, 0, ' bpm')}</Typography>
             </Box>
             <Box>
-              <Typography variant="caption" sx={{ opacity: 0.85 }}>SpO₂</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 700 }}>{patient.vitals.spO2.toFixed(0)}%</Typography>
+              <Typography variant="caption" sx={{ opacity: 0.85 }}>SpO2</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>{formatMetric(patient.vitals.spO2, 0, '%')}</Typography>
             </Box>
             <Box>
               <Typography variant="caption" sx={{ opacity: 0.85 }}>Temp</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 700 }}>{patient.vitals.temperature.toFixed(1)}°C</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>{formatMetric(patient.vitals.temperature, 1, '°C')}</Typography>
             </Box>
           </Stack>
         </Stack>
       </Paper>
 
       <Container maxWidth="xl" sx={{ mb: 4 }}>
-        {/* Critical Alert */}
-        {patient.status === 'critical' && (
+        {patient.status === PATIENT_STATUS.CRITICAL && (
           <Alert
             severity="error"
             sx={{ mb: 3, animation: 'slideInFromTop 0.5s ease' }}
             icon={<WarningIcon />}
           >
             <Typography variant="body2" sx={{ fontWeight: 700 }}>
-              ⚠️ ALERTA CRÍTICA: Este paciente requiere atención inmediata
+              ALERTA CRITICA: Este paciente requiere atencion inmediata
             </Typography>
           </Alert>
         )}
 
-        {/* Charts Section */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
-          {/* Heart Rate Chart */}
           <Grid item xs={12} lg={6}>
             <Card sx={{ height: '400px' }}>
               <CardHeader
-                title="Frecuencia Cardíaca (últimos 30 minutos)"
+                title="Frecuencia Cardiaca (ultimos 30 minutos)"
                 avatar={<HeartIcon sx={{ color: '#F44336' }} />}
                 sx={{
                   backgroundColor: '#FFEBEE',
@@ -227,11 +222,7 @@ export const PatientDetailView = ({ onBack }) => {
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" />
-                    <XAxis
-                      dataKey="time"
-                      stroke="#999"
-                      tick={{ fontSize: 11 }}
-                    />
+                    <XAxis dataKey="time" stroke="#999" tick={{ fontSize: 11 }} />
                     <YAxis
                       stroke="#999"
                       tick={{ fontSize: 11 }}
@@ -245,7 +236,7 @@ export const PatientDetailView = ({ onBack }) => {
                         borderRadius: 8,
                         color: '#fff'
                       }}
-                      formatter={(value) => [`${value.toFixed(0)} bpm`, 'HR']}
+                      formatter={(value) => formatChartValue(value, 'bpm', 'HR')}
                     />
                     <Area
                       type="monotone"
@@ -261,11 +252,10 @@ export const PatientDetailView = ({ onBack }) => {
             </Card>
           </Grid>
 
-          {/* SpO2 Chart */}
           <Grid item xs={12} lg={6}>
             <Card sx={{ height: '400px' }}>
               <CardHeader
-                title="Saturación de Oxígeno (últimos 30 minutos)"
+                title="Saturacion de Oxigeno (ultimos 30 minutos)"
                 avatar={<LungIcon sx={{ color: '#2196F3' }} />}
                 sx={{
                   backgroundColor: '#E3F2FD',
@@ -282,11 +272,7 @@ export const PatientDetailView = ({ onBack }) => {
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" />
-                    <XAxis
-                      dataKey="time"
-                      stroke="#999"
-                      tick={{ fontSize: 11 }}
-                    />
+                    <XAxis dataKey="time" stroke="#999" tick={{ fontSize: 11 }} />
                     <YAxis
                       stroke="#999"
                       tick={{ fontSize: 11 }}
@@ -300,7 +286,7 @@ export const PatientDetailView = ({ onBack }) => {
                         borderRadius: 8,
                         color: '#fff'
                       }}
-                      formatter={(value) => [`${value.toFixed(0)}%`, 'SpO₂']}
+                      formatter={(value) => formatChartValue(value, '%', 'SpO2')}
                     />
                     <Area
                       type="monotone"
@@ -317,15 +303,13 @@ export const PatientDetailView = ({ onBack }) => {
           </Grid>
         </Grid>
 
-        {/* Configuration & Actions */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
-          {/* Threshold Configuration */}
           <Grid item xs={12} md={6}>
             <Card>
               <CardHeader
-                title="Configuración de Umbrales"
+                title="Configuracion de Umbrales"
                 avatar={<SettingsIcon />}
-                action={
+                action={(
                   <Button
                     startIcon={<SettingsIcon />}
                     onClick={() => setThresholdsDialogOpen(true)}
@@ -333,13 +317,13 @@ export const PatientDetailView = ({ onBack }) => {
                   >
                     Editar
                   </Button>
-                }
+                )}
               />
               <CardContent>
                 <Stack spacing={2}>
                   <Box>
                     <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
-                      Frecuencia Cardíaca
+                      Frecuencia Cardiaca
                     </Typography>
                     <Typography variant="caption" sx={{ color: '#666' }}>
                       {patient.thresholds.heartRate.min} - {patient.thresholds.heartRate.max} bpm
@@ -347,7 +331,7 @@ export const PatientDetailView = ({ onBack }) => {
                   </Box>
                   <Box>
                     <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
-                      Saturación de Oxígeno
+                      Saturacion de Oxigeno
                     </Typography>
                     <Typography variant="caption" sx={{ color: '#666' }}>
                       {patient.thresholds.spO2.min} - {patient.thresholds.spO2.max}%
@@ -355,10 +339,10 @@ export const PatientDetailView = ({ onBack }) => {
                   </Box>
                   <Box>
                     <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
-                      Presión Sistólica
+                      Presion Sistolica
                     </Typography>
                     <Typography variant="caption" sx={{ color: '#666' }}>
-                      {patient.thresholds.systolic.min} - {patient.thresholds.systolic.max} mmHg
+                      {patient.thresholds.systolicPressure.min} - {patient.thresholds.systolicPressure.max} mmHg
                     </Typography>
                   </Box>
                   <Box>
@@ -374,12 +358,9 @@ export const PatientDetailView = ({ onBack }) => {
             </Card>
           </Grid>
 
-          {/* Quick Actions */}
           <Grid item xs={12} md={6}>
             <Card>
-              <CardHeader
-                title="Acciones Rápidas"
-              />
+              <CardHeader title="Acciones Rapidas" />
               <CardContent>
                 <Stack spacing={1.5}>
                   <Button
@@ -390,13 +371,13 @@ export const PatientDetailView = ({ onBack }) => {
                     sx={{
                       py: 1.5,
                       fontWeight: 700,
-                      animation: patient.status === 'critical' ? 'pulse 1.5s infinite' : 'none'
+                      animation: patient.status === PATIENT_STATUS.CRITICAL ? 'pulse 1.5s infinite' : 'none'
                     }}
                   >
-                    🚨 Botón de Pánico (Módulo de Internación)
+                    Boton de Panico (Modulo de Internacion)
                   </Button>
                   <Typography variant="caption" sx={{ color: '#666', textAlign: 'center' }}>
-                    Dispara una alerta crítica al equipo de internación
+                    Dispara una alerta critica al equipo de internacion
                   </Typography>
                 </Stack>
               </CardContent>
@@ -404,7 +385,6 @@ export const PatientDetailView = ({ onBack }) => {
           </Grid>
         </Grid>
 
-        {/* Alert History */}
         <Card sx={{ mb: 4 }}>
           <CardHeader
             title="Historial de Alertas"
@@ -420,9 +400,9 @@ export const PatientDetailView = ({ onBack }) => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {patient.alertHistory && patient.alertHistory.length > 0 ? (
-                  patient.alertHistory.map((alert, idx) => (
-                    <TableRow key={idx} sx={{ '&:hover': { backgroundColor: '#F9F9F9' } }}>
+                {patient.alertHistory.length > 0 ? (
+                  patient.alertHistory.map((alert) => (
+                    <TableRow key={alert.id} sx={{ '&:hover': { backgroundColor: '#F9F9F9' } }}>
                       <TableCell>
                         <Typography variant="caption" sx={{ color: '#666' }}>
                           {alert.timestamp.toLocaleTimeString('es-ES')}
@@ -454,73 +434,72 @@ export const PatientDetailView = ({ onBack }) => {
         </Card>
       </Container>
 
-      {/* Thresholds Edit Dialog */}
       <Dialog open={thresholdsDialogOpen} onClose={() => setThresholdsDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Configurar Umbrales de Alerta</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           <Stack spacing={3}>
             <Box>
               <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                Frecuencia Cardíaca (bpm)
+                Frecuencia Cardiaca (bpm)
               </Typography>
               <Stack direction="row" spacing={2}>
                 <TextField
-                  label="Mín"
+                  label="Min"
                   type="number"
                   size="small"
                   value={editedThresholds.heartRate?.min || ''}
-                  onChange={(e) => handleThresholdsChange('heartRate', 'min', e.target.value)}
+                  onChange={(event) => handleThresholdsChange('heartRate', 'min', event.target.value)}
                 />
                 <TextField
-                  label="Máx"
+                  label="Max"
                   type="number"
                   size="small"
                   value={editedThresholds.heartRate?.max || ''}
-                  onChange={(e) => handleThresholdsChange('heartRate', 'max', e.target.value)}
+                  onChange={(event) => handleThresholdsChange('heartRate', 'max', event.target.value)}
                 />
               </Stack>
             </Box>
 
             <Box>
               <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                Saturación de Oxígeno (%)
+                Saturacion de Oxigeno (%)
               </Typography>
               <Stack direction="row" spacing={2}>
                 <TextField
-                  label="Mín"
+                  label="Min"
                   type="number"
                   size="small"
                   value={editedThresholds.spO2?.min || ''}
-                  onChange={(e) => handleThresholdsChange('spO2', 'min', e.target.value)}
+                  onChange={(event) => handleThresholdsChange('spO2', 'min', event.target.value)}
                 />
                 <TextField
-                  label="Máx"
+                  label="Max"
                   type="number"
                   size="small"
                   value={editedThresholds.spO2?.max || ''}
-                  onChange={(e) => handleThresholdsChange('spO2', 'max', e.target.value)}
+                  onChange={(event) => handleThresholdsChange('spO2', 'max', event.target.value)}
                 />
               </Stack>
             </Box>
 
             <Box>
               <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                Presión Sistólica (mmHg)
+                Presion Sistolica (mmHg)
               </Typography>
               <Stack direction="row" spacing={2}>
                 <TextField
-                  label="Mín"
+                  label="Min"
                   type="number"
                   size="small"
-                  value={editedThresholds.systolic?.min || ''}
-                  onChange={(e) => handleThresholdsChange('systolic', 'min', e.target.value)}
+                  value={editedThresholds.systolicPressure?.min || ''}
+                  onChange={(event) => handleThresholdsChange('systolicPressure', 'min', event.target.value)}
                 />
                 <TextField
-                  label="Máx"
+                  label="Max"
                   type="number"
                   size="small"
-                  value={editedThresholds.systolic?.max || ''}
-                  onChange={(e) => handleThresholdsChange('systolic', 'max', e.target.value)}
+                  value={editedThresholds.systolicPressure?.max || ''}
+                  onChange={(event) => handleThresholdsChange('systolicPressure', 'max', event.target.value)}
                 />
               </Stack>
             </Box>
@@ -531,20 +510,20 @@ export const PatientDetailView = ({ onBack }) => {
               </Typography>
               <Stack direction="row" spacing={2}>
                 <TextField
-                  label="Mín"
+                  label="Min"
                   type="number"
                   size="small"
                   inputProps={{ step: '0.1' }}
                   value={editedThresholds.temperature?.min || ''}
-                  onChange={(e) => handleThresholdsChange('temperature', 'min', e.target.value)}
+                  onChange={(event) => handleThresholdsChange('temperature', 'min', event.target.value)}
                 />
                 <TextField
-                  label="Máx"
+                  label="Max"
                   type="number"
                   size="small"
                   inputProps={{ step: '0.1' }}
                   value={editedThresholds.temperature?.max || ''}
-                  onChange={(e) => handleThresholdsChange('temperature', 'max', e.target.value)}
+                  onChange={(event) => handleThresholdsChange('temperature', 'max', event.target.value)}
                 />
               </Stack>
             </Box>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import { Box } from '@mui/material';
+import { SnackbarProvider } from 'notistack';
 import { theme, globalStyles } from './theme/theme';
 import { HealthGridProvider } from './context/HealthGridContext';
 import { Layout } from './components/Layout';
@@ -56,14 +56,16 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <HealthGridProvider>
-        <Layout
-          currentView={currentView}
-          onViewChange={handleViewChange}
-        >
-          {renderView()}
-        </Layout>
-      </HealthGridProvider>
+      <SnackbarProvider maxSnack={3} anchorOrigin={{ vertical: 'top', horizontal: 'right' }}>
+        <HealthGridProvider>
+          <Layout
+            currentView={currentView}
+            onViewChange={handleViewChange}
+          >
+            {renderView()}
+          </Layout>
+        </HealthGridProvider>
+      </SnackbarProvider>
     </ThemeProvider>
   );
 }

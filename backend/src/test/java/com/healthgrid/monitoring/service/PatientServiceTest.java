@@ -2,6 +2,7 @@ package com.healthgrid.monitoring.service;
 
 import com.healthgrid.monitoring.dto.PatientDTO;
 import com.healthgrid.monitoring.model.Patient;
+import com.healthgrid.monitoring.model.PatientStatus;
 import com.healthgrid.monitoring.repository.PatientRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,15 +12,18 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-/**
- * Unit tests for PatientService.
- */
 @ExtendWith(MockitoExtension.class)
 class PatientServiceTest {
 
@@ -31,32 +35,25 @@ class PatientServiceTest {
 
     private PatientDTO testPatientDTO;
     private Patient testPatient;
+    private UUID patientId;
 
     @BeforeEach
     void setUp() {
+        patientId = UUID.randomUUID();
+
         testPatientDTO = PatientDTO.builder()
-            .mrn("MRN-001")
-            .firstName("John")
-            .lastName("Doe")
-            .age(45)
-            .gender("M")
-            .status("ADMITTED")
-            .diagnosis("Hypertension")
-            .roomNumber("101")
-            .bedNumber("A")
+            .name("Juan Perez")
+            .room("101")
+            .bed("A")
+            .status(PatientStatus.NORMAL)
             .build();
 
         testPatient = Patient.builder()
-            .id(1L)
-            .mrn("MRN-001")
-            .firstName("John")
-            .lastName("Doe")
-            .age(45)
-            .gender("M")
-            .status("ADMITTED")
-            .diagnosis("Hypertension")
-            .roomNumber("101")
-            .bedNumber("A")
+            .id(patientId)
+            .name("Juan Perez")
+            .room("101")
+            .bed("A")
+            .status(PatientStatus.NORMAL)
             .createdAt(LocalDateTime.now())
             .updatedAt(LocalDateTime.now())
             .build();
@@ -69,39 +66,39 @@ class PatientServiceTest {
         PatientDTO result = patientService.createPatient(testPatientDTO);
 
         assertNotNull(result);
-        assertEquals("MRN-001", result.getMrn());
-        assertEquals("John", result.getFirstName());
+        assertEquals("Juan Perez", result.getName());
+        assertEquals("101", result.getRoom());
         verify(patientRepository, times(1)).save(any(Patient.class));
     }
 
     @Test
     void testGetPatientById() {
-        when(patientRepository.findById(1L)).thenReturn(Optional.of(testPatient));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(testPatient));
 
-        PatientDTO result = patientService.getPatientById(1L);
+        PatientDTO result = patientService.getPatientById(patientId);
 
         assertNotNull(result);
-        assertEquals(1L, result.getId());
-        assertEquals("MRN-001", result.getMrn());
-        verify(patientRepository, times(1)).findById(1L);
+        assertEquals(patientId, result.getId());
+        assertEquals("Juan Perez", result.getName());
+        verify(patientRepository, times(1)).findById(patientId);
     }
 
     @Test
     void testGetPatientByIdNotFound() {
-        when(patientRepository.findById(999L)).thenReturn(Optional.empty());
+        UUID missingId = UUID.randomUUID();
+        when(patientRepository.findById(missingId)).thenReturn(Optional.empty());
 
-        assertThrows(RuntimeException.class, () -> patientService.getPatientById(999L));
+        assertThrows(RuntimeException.class, () -> patientService.getPatientById(missingId));
     }
 
     @Test
-    void testGetPatientByMrn() {
-        when(patientRepository.findByMrn("MRN-001")).thenReturn(Optional.of(testPatient));
+    void testGetPatientsByStatus() {
+        when(patientRepository.findByStatus(PatientStatus.NORMAL)).thenReturn(List.of(testPatient));
 
-        PatientDTO result = patientService.getPatientByMrn("MRN-001");
+        List<PatientDTO> result = patientService.getPatientsByStatus(PatientStatus.NORMAL);
 
-        assertNotNull(result);
-        assertEquals("MRN-001", result.getMrn());
-        verify(patientRepository, times(1)).findByMrn("MRN-001");
+        assertEquals(1, result.size());
+        assertEquals("Juan Perez", result.get(0).getName());
+        verify(patientRepository, times(1)).findByStatus(PatientStatus.NORMAL);
     }
-
 }

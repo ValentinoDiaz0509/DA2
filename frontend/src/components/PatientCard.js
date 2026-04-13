@@ -9,19 +9,23 @@ import {
   Button,
   Chip,
   Grid,
-  Tooltip,
   LinearProgress
 } from '@mui/material';
 import {
   Favorite as HeartIcon,
   Air as LungIcon,
   Thermostat as TempIcon,
+  MonitorHeart as PressureIcon,
   Warning as WarningIcon,
   Done as DoneIcon
 } from '@mui/icons-material';
 import { STATUS_COLORS, PATIENT_STATUS } from '../data/constants';
 
 const getVitalStatus = (value, min, max) => {
+  if (value == null) {
+    return 'neutral';
+  }
+
   if (value < min || value > max) {
     return 'error';
   }
@@ -29,13 +33,25 @@ const getVitalStatus = (value, min, max) => {
 };
 
 const getVitalColor = (status) => {
-  return status === 'error' ? '#F44336' : '#4CAF50';
+  if (status === 'error') {
+    return '#F44336';
+  }
+
+  if (status === 'neutral') {
+    return '#90A4AE';
+  }
+
+  return '#4CAF50';
 };
+
+const formatVitalValue = (value, digits = 1) => (
+  typeof value === 'number' ? value.toFixed(digits) : '--'
+);
 
 export const PatientCard = ({ patient, onSelect, isSelected }) => {
   if (!patient) return null;
 
-  const statusConfig = STATUS_COLORS[patient.status];
+  const statusConfig = STATUS_COLORS[patient.status] || STATUS_COLORS[PATIENT_STATUS.NORMAL];
 
   const VitalDisplay = ({ icon: Icon, label, value, unit, min, max }) => {
     const status = getVitalStatus(value, min, max);
@@ -80,11 +96,15 @@ export const PatientCard = ({ patient, onSelect, isSelected }) => {
             color: color
           }}
         >
-          {value.toFixed(1)}<Typography component="span" sx={{ fontSize: '0.75rem' }}>{unit}</Typography>
+          {formatVitalValue(value)}<Typography component="span" sx={{ fontSize: '0.75rem' }}>{unit}</Typography>
         </Typography>
         <LinearProgress
           variant="determinate"
-          value={Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100))}
+          value={
+            typeof value === 'number'
+              ? Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100))
+              : 0
+          }
           sx={{
             width: '100%',
             mt: 0.5,
@@ -101,10 +121,18 @@ export const PatientCard = ({ patient, onSelect, isSelected }) => {
   };
 
   const criticalVitals = [
-    patient.vitals.heartRate > 120 || patient.vitals.heartRate < 50,
-    patient.vitals.spO2 < 90,
-    patient.vitals.systolic > 160 || patient.vitals.systolic < 70,
-    patient.vitals.temperature > 39 || patient.vitals.temperature < 36
+    typeof patient.vitals.heartRate === 'number' &&
+      (patient.vitals.heartRate > patient.thresholds.heartRate.max ||
+        patient.vitals.heartRate < patient.thresholds.heartRate.min),
+    typeof patient.vitals.spO2 === 'number' &&
+      (patient.vitals.spO2 > patient.thresholds.spO2.max ||
+        patient.vitals.spO2 < patient.thresholds.spO2.min),
+    typeof patient.vitals.systolicPressure === 'number' &&
+      (patient.vitals.systolicPressure > patient.thresholds.systolicPressure.max ||
+        patient.vitals.systolicPressure < patient.thresholds.systolicPressure.min),
+    typeof patient.vitals.temperature === 'number' &&
+      (patient.vitals.temperature > patient.thresholds.temperature.max ||
+        patient.vitals.temperature < patient.thresholds.temperature.min)
   ];
 
   const hasCriticalVital = criticalVitals.some(v => v);
@@ -177,11 +205,11 @@ export const PatientCard = ({ patient, onSelect, isSelected }) => {
                 fontSize: '0.8rem'
               }}
             >
-              Edad: {patient.age} años
+              Habitacion {patient.room} • Cama {patient.bed}
             </Typography>
           </Box>
           <Chip
-            label={`${patient.floor}-${patient.bed}`}
+            label={patient.floor ? `Piso ${patient.floor}` : 'Piso N/D'}
             size="small"
             sx={{
               backgroundColor: statusConfig.borderColor,
@@ -205,7 +233,7 @@ export const PatientCard = ({ patient, onSelect, isSelected }) => {
             pl: 1
           }}
         >
-          {patient.diagnosis}
+          {patient.diagnosis || 'Sin diagnostico disponible en este modulo'}
         </Typography>
 
         {/* Estado Badge */}
@@ -213,7 +241,7 @@ export const PatientCard = ({ patient, onSelect, isSelected }) => {
           <Chip
             label={patient.status.toUpperCase()}
             size="small"
-            icon={patient.status === PATIENT_STATUS.STABLE ? <DoneIcon /> : undefined}
+            icon={patient.status === PATIENT_STATUS.NORMAL ? <DoneIcon /> : undefined}
             sx={{
               backgroundColor: statusConfig.borderColor,
               color: '#fff',
@@ -258,12 +286,12 @@ export const PatientCard = ({ patient, onSelect, isSelected }) => {
           </Grid>
           <Grid item xs={6}>
             <VitalDisplay
-              icon={TempIcon}
+              icon={PressureIcon}
               label="Presión Sistólica"
-              value={patient.vitals.systolic}
+              value={patient.vitals.systolicPressure}
               unit="mmHg"
-              min={patient.thresholds.systolic.min}
-              max={patient.thresholds.systolic.max}
+              min={patient.thresholds.systolicPressure.min}
+              max={patient.thresholds.systolicPressure.max}
             />
           </Grid>
           <Grid item xs={6}>

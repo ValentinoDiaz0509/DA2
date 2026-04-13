@@ -1,6 +1,8 @@
 package com.healthgrid.monitoring.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
+import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -51,82 +53,4 @@ public class PatientMonitoringDTO {
     
     @JsonProperty("last_update")
     private LocalDateTime lastUpdate;
-}
-
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
-@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class MetricDTO {
-    
-    @JsonProperty("value")
-    private Float value;
-    
-    @JsonProperty("unit")
-    private String unit;
-    
-    @JsonProperty("timestamp")
-    private LocalDateTime timestamp;
-    
-    @JsonProperty("status") // NORMAL, WARNING, CRITICAL, UNKNOWN
-    private String status;
-    
-    @JsonProperty("rule_threshold")
-    private Double ruleThreshold;
-}
-
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
-@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class AlertSummaryDTO {
-    
-    @JsonProperty("alert_id")
-    private UUID alertId;
-    
-    @JsonProperty("severity") // CRITICAL, WARNING, INFO
-    private String severity;
-    
-    @JsonProperty("message")
-    private String message;
-    
-    @JsonProperty("triggered_at")
-    private LocalDateTime triggeredAt;
-    
-    @JsonProperty("metric_name")
-    private String metricName;
-    
-    @JsonProperty("metric_value")
-    private Double metricValue;
-}
-
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
-@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class MonitoringUpdateDTO {
-    
-    @JsonProperty("patient_id")
-    private UUID patientId;
-    
-    @JsonProperty("heart_rate")
-    private Float heartRate;
-    
-    @JsonProperty("spo2")
-    private Float spO2;
-    
-    @JsonProperty("systolic_pressure")
-    private Float systolicPressure;
-    
-    @JsonProperty("diastolic_pressure")
-    private Float diastolicPressure;
-    
-    @JsonProperty("temperature")
-    private Float temperature;
-    
-    @JsonProperty("timestamp")
-    private LocalDateTime timestamp;
 }

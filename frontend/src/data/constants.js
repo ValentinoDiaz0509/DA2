@@ -27,9 +27,27 @@ export const PATIENT_STATUS = {
  * Sincronizados con PATIENT_STATUS keys
  */
 export const STATUS_COLORS = {
-  [PATIENT_STATUS.NORMAL]: '#4CAF50',      // Verde - Estable
-  [PATIENT_STATUS.WARNING]: '#FF9800',     // Ámbar - Alerta
-  [PATIENT_STATUS.CRITICAL]: '#f44336'     // Rojo - Crítico
+  [PATIENT_STATUS.NORMAL]: {
+    bgColor: '#E8F5E9',
+    borderColor: '#4CAF50',
+    textColor: '#1B5E20'
+  },
+  [PATIENT_STATUS.WARNING]: {
+    bgColor: '#FFF3E0',
+    borderColor: '#FF9800',
+    textColor: '#E65100'
+  },
+  [PATIENT_STATUS.CRITICAL]: {
+    bgColor: '#FFEBEE',
+    borderColor: '#F44336',
+    textColor: '#B71C1C'
+  }
+};
+
+export const SEVERITY_LEVELS = {
+  CRITICAL: 'CRITICAL',
+  WARNING: 'WARNING',
+  INFO: 'INFO'
 };
 
 export const FILTER_OPTIONS = {
@@ -67,7 +85,7 @@ export const VITAL_SIGNS_CONFIG = {
     normalMax: 100,
     icon: 'air'
   },
-  systolic: {
+  systolicPressure: {
     label: 'Presión Sistólica',
     unit: 'mmHg',
     min: 70,
@@ -76,7 +94,7 @@ export const VITAL_SIGNS_CONFIG = {
     normalMax: 140,
     icon: 'bloodtype'
   },
-  diastolic: {
+  diastolicPressure: {
     label: 'Presión Diastólica',
     unit: 'mmHg',
     min: 40,
@@ -133,14 +151,13 @@ export const SIMULATION_CONFIG = {
  * Esta función permite futuras traducciones si es necesario.
  */
 export const mapStatusFromBackend = (backendStatus) => {
+  const normalizedStatus = `${backendStatus || ''}`.toUpperCase();
   const statusMap = {
-    'NORMAL': PATIENT_STATUS.NORMAL,
-    'WARNING': PATIENT_STATUS.WARNING,
-    'CRITICAL': PATIENT_STATUS.CRITICAL,
+    NORMAL: PATIENT_STATUS.NORMAL,
+    WARNING: PATIENT_STATUS.WARNING,
+    CRITICAL: PATIENT_STATUS.CRITICAL,
     // Compatibilidad con antiguo formato si existe
-    'stable': PATIENT_STATUS.NORMAL,
-    'warning': PATIENT_STATUS.WARNING,
-    'critical': PATIENT_STATUS.CRITICAL
+    STABLE: PATIENT_STATUS.NORMAL
   };
-  return statusMap[backendStatus] || PATIENT_STATUS.NORMAL;
+  return statusMap[normalizedStatus] || PATIENT_STATUS.NORMAL;
 };

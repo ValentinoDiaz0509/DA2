@@ -25,7 +25,7 @@ import java.util.UUID;
  * Provides endpoints for managing patient alerts and acknowledgments.
  */
 @RestController
-@RequestMapping("/api/v1/alerts")
+@RequestMapping("/alerts")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Alerts", description = "Alert management and acknowledgment")

@@ -1,22 +1,25 @@
 package com.healthgrid.monitoring.security;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.MalformedJwtException;
+import io.jsonwebtoken.UnsupportedJwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.util.Pair;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.ArrayList;
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 /**
  * JWT Authentication Filter.
@@ -29,7 +32,9 @@ import java.util.List;
 @Slf4j
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
-    
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
     private final JwtTokenProvider jwtTokenProvider;
     
     @Override
@@ -140,13 +145,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         response.setStatus(status);
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
-        
-        JsonObject errorBody = new JsonObject();
-        errorBody.addProperty("error", message);
-        errorBody.addProperty("timestamp", LocalDateTime.now().toString());
-        errorBody.addProperty("status", status);
-        
-        response.getWriter().write(errorBody.toString());
+
+        Map<String, Object> errorBody = Map.of(
+            "error", message,
+            "timestamp", LocalDateTime.now().toString(),
+            "status", status
+        );
+
+        response.getWriter().write(OBJECT_MAPPER.writeValueAsString(errorBody));
     }
     
     /**
@@ -154,12 +160,23 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      */
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        String path = request.getRequestURI();
-        
+        String path = getPathWithoutContext(request);
+
         return path.startsWith("/swagger-ui") ||
                path.startsWith("/v3/api-docs") ||
                path.startsWith("/health") ||
                path.startsWith("/actuator") ||
-               path.startsWith("/api/v1/auth");
+               path.startsWith("/auth");
+    }
+
+    private String getPathWithoutContext(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        String contextPath = request.getContextPath();
+
+        if (contextPath != null && !contextPath.isEmpty() && path.startsWith(contextPath)) {
+            return path.substring(contextPath.length());
+        }
+
+        return path;
     }
 }

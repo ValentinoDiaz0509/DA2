@@ -1,5 +1,9 @@
 package com.healthgrid.monitoring.controller;
 
+import com.healthgrid.monitoring.dto.auth.AuthInfo;
+import com.healthgrid.monitoring.dto.auth.TokenRequest;
+import com.healthgrid.monitoring.dto.auth.TokenResponse;
+import com.healthgrid.monitoring.dto.auth.TokenValidationResponse;
 import com.healthgrid.monitoring.security.JwtTokenProvider;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -7,9 +11,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -29,12 +30,14 @@ import org.springframework.web.bind.annotation.RestController;
  * - Token validation
  */
 @RestController
-@RequestMapping("/api/v1/auth")
+@RequestMapping("/auth")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Authentication", description = "JWT token endpoints (Module 10 - Core)")
 public class AuthenticationController {
 
+    // TODO(core): eliminar este controller del flujo real cuando Core emita y valide JWT.
+    // TODO(core): conservarlo solo bajo perfil mock/dev si sigue siendo util para pruebas locales.
     private final JwtTokenProvider jwtTokenProvider;
 
     /**
@@ -160,58 +163,6 @@ public class AuthenticationController {
                     .build();
             return ResponseEntity.ok(info);
         }
-    }
-
-    /**
-     * Request for token generation.
-     */
-    @Data
-    @Builder
-    @AllArgsConstructor
-    public static class TokenRequest {
-        private String module;    // e.g., "Monitoring", "Patients", "Internacion"
-        private String userId;    // e.g., "system", "module-5"
-    }
-
-    /**
-     * Response containing generated token.
-     */
-    @Data
-    @Builder
-    @AllArgsConstructor
-    public static class TokenResponse {
-        private String token;
-        private String type;  // "Bearer"
-        private long expiresIn;  // seconds
-        private String module;
-        private String userId;
-        private String issuer;  // "Module10-Core"
-    }
-
-    /**
-     * Response for token validation.
-     */
-    @Data
-    @Builder
-    @AllArgsConstructor
-    public static class TokenValidationResponse {
-        private boolean valid;
-        private String message;
-        private String module;
-        private String userId;
-    }
-
-    /**
-     * Current authentication information.
-     */
-    @Data
-    @Builder
-    @AllArgsConstructor
-    public static class AuthInfo {
-        private String module;
-        private String userId;
-        private boolean authenticated;
-        private String issuer;
     }
 
 }

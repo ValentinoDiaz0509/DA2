@@ -72,8 +72,7 @@ public interface RuleRepository extends JpaRepository<Rule, UUID> {
      * @param metricName the metric name
      * @return optional containing the rule if found
      */
-    @Query("SELECT r FROM Rule r WHERE r.metricName = :metricName AND r.enabled = true LIMIT 1")
-    Optional<Rule> findActiveRuleForMetric(@Param("metricName") String metricName);
+    Optional<Rule> findFirstByMetricNameAndEnabledTrueOrderByCreatedAtAsc(String metricName);
 
     /**
      * Find all CRITICAL severity rules that are enabled.

@@ -17,7 +17,6 @@ import {
   Card,
   CardContent,
   CardHeader,
-  Grid,
   IconButton,
   Tooltip,
   Dialog,
@@ -31,11 +30,10 @@ import {
   Info as InfoIcon,
   Check as CheckIcon,
   NorthEast as TrendingUp,
-  Phone as PhoneIcon,
-  Close as CloseIcon
+  Phone as PhoneIcon
 } from '@mui/icons-material';
 import { useHealthGrid } from '../context/HealthGridContext';
-import { SEVERITY_LEVELS, ALERT_SEVERITY_CONFIG } from '../data/constants';
+import { SEVERITY_LEVELS } from '../data/constants';
 
 export const AlertsSupervisionPanel = ({ onContactInternation }) => {
   const {
@@ -44,7 +42,6 @@ export const AlertsSupervisionPanel = ({ onContactInternation }) => {
     criticalAlertsCount,
     acknowledgeAlert,
     triggerManualPanic,
-    getSelectedPatient,
     setSelectedPatientId,
     patients
   } = useHealthGrid();

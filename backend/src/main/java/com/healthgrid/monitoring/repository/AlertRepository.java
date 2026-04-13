@@ -87,11 +87,17 @@ public interface AlertRepository extends JpaRepository<Alert, UUID> {
      * @param hours the number of hours to look back
      * @return list of recent alerts
      */
-    @Query("SELECT a FROM Alert a WHERE a.patient = :patient AND a.triggeredAt > DATE_SUB(NOW(), INTERVAL :hours HOUR) ORDER BY a.triggeredAt DESC")
-    List<Alert> findRecentAlertsForPatient(
-        @Param("patient") Patient patient,
-        @Param("hours") Integer hours
+    List<Alert> findByPatientAndTriggeredAtAfterOrderByTriggeredAtDesc(
+        Patient patient,
+        LocalDateTime cutoff
     );
+
+    default List<Alert> findRecentAlertsForPatient(Patient patient, Integer hours) {
+        return findByPatientAndTriggeredAtAfterOrderByTriggeredAtDesc(
+            patient,
+            LocalDateTime.now().minusHours(hours)
+        );
+    }
 
     /**
      * Find alerts for a patient by severity.

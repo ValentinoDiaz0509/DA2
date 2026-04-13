@@ -8,7 +8,7 @@ import { Client } from '@stomp/stompjs';
  */
 class WebSocketClient {
   constructor(token) {
-    this.token = token;
+    this.token = token || localStorage.getItem('jwt_token');
     this.client = null;
     this.subscriptions = new Map();
     this.reconnectAttempts = 0;
@@ -36,15 +36,19 @@ class WebSocketClient {
 
       this.isConnecting = true;
 
-      const WS_URL = process.env.REACT_APP_WS_URL || 'ws://localhost:8080/ws';
+      const WS_URL = process.env.REACT_APP_WS_URL || 'ws://localhost:8080/api/v1/ws';
+      const connectHeaders = {
+        login: 'guest',
+        passcode: 'guest'
+      };
+
+      if (this.token) {
+        connectHeaders.Authorization = `Bearer ${this.token}`;
+      }
 
       this.client = new Client({
         brokerURL: WS_URL,
-        connectHeaders: {
-          'Authorization': `Bearer ${this.token}`,
-          'login': 'guest',
-          'passcode': 'guest'
-        },
+        connectHeaders,
         debug: (str) => {
           console.log('[WebSocket]', str);
         },
