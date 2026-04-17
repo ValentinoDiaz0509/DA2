@@ -1,0 +1,133 @@
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+}
+
+.modal-content {
+  background-color: white;
+  width: 500px;
+  border-radius: var(--border-radius-md);
+  padding: 32px;
+  box-shadow: var(--shadow-lg);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.close-btn {
+  color: var(--text-muted);
+  transition: color 0.2s;
+}
+
+.close-btn:hover {
+  color: var(--text-dark);
+}
+
+.modal-subtitle {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: 8px;
+  margin-bottom: 32px;
+}
+
+.rule-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-row.split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+
+select, input[type="number"], .input-with-end {
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  font-size: 0.95rem;
+  outline: none;
+  background-color: white;
+}
+
+select:focus, input[type="number"]:focus, .input-with-end:focus-within {
+  border-color: var(--accent-primary);
+}
+
+.input-with-end {
+  display: flex;
+  align-items: center;
+  padding: 0;
+}
+
+.input-with-end input {
+  border: none;
+  flex: 1;
+  padding: 12px;
+  min-width: 0;
+  border-radius: var(--border-radius-md) 0 0 var(--border-radius-md);
+}
+
+.input-end {
+  padding: 0 16px;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  background-color: var(--bg-main);
+  border-left: 1px solid var(--border-color);
+  height: 100%;
+  display: flex;
+  align-items: center;
+  border-radius: 0 var(--border-radius-md) var(--border-radius-md) 0;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.btn-text {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.btn-text:hover {
+  color: var(--text-dark);
+}
+
+.btn-primary {
+  background-color: var(--bg-sidebar);
+}
